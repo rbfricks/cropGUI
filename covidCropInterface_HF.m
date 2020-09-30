@@ -2,7 +2,7 @@
 pause on
 warning off
 t =  readtable('HF_index.csv', 'Delimiter', ',');
-fname = 'Answers_HFHS.csv';
+fname = 'Answers_HFHS2.csv';
 warning on
 n_max = size(t,1);
 im_size = [1000 1000];
@@ -30,11 +30,11 @@ clc;
 db_path = pwd;
 
 roi_records = zeros(n_max,4);
-is_chest = zeros(n_max,1);
-front_or_lat = zeros(n_max,1);
+is_chest = ones(n_max,1);
+front_or_lat = ones(n_max,1);
 orig_or_enhanced = zeros(n_max,1);
 
-ind = 1;
+ind = 513;
 while(ind<n_max+1)
     % Read the file path for this example %
     path = interpretPath(db_path, t.ImagePath(ind));
@@ -54,15 +54,56 @@ while(ind<n_max+1)
     
     f = figure(1);
     
-    if(strcmpi(t.Center{ind},'Busto'))
-        img = (double(img) - 8000)/(22000 - 8000);
-        img = abs(img - 1);
+%     if(strcmpi(t.Center{ind},'Busto'))
+%         img = (double(img) - 8000)/(22000 - 8000);
+%         img = abs(img - 1);
+%         wmin = 0;
+%         wmax = 1;
+%     else
+%         wmin = 0;
+%         wmax = 4095;
+%     end
+
+    %%% Correct for multiformat %%%
+    try
+        PIR = info.PixelIntensityRelationship;
+    catch ME
+        PIR = [];
+    end
+
+    try
+        PLS = info.PresentationLUTShape;
+    catch ME2
+        PLS = [];
+    end
+
+
+
+    if(strcmpi(PLS,'Inverse'))
+        dmax = 22000;
+        dmin = 8000;
+        img(img>dmax) = dmax;
+        img(img<dmin) = dmin;
+        img = (double(img) - dmin)/(dmax-dmin);
+        img = abs(1-img);
         wmin = 0;
         wmax = 1;
+        
     else
-        wmin = 0;
-        wmax = 4095;
+        try
+            wc = info.WindowCenter(1);
+            ww = info.WindowWidth(1);
+            wmin = wc - ww/2;
+            wmax = wc + ww/2;
+          
+        catch ME3
+            wmin = 0;
+            wmax = 4095;
+            
+        end
     end
+    %%% END Correct for multiformat %%%
+    
     imshow(img, [wmin wmax],'InitialMagnification','fit')
     title(namer)
     % axes(f, 'tight')
@@ -72,32 +113,23 @@ while(ind<n_max+1)
     ax.Toolbar.Visible = 'off';
 
     % Is this a chest image? %
-    Question = ['Is this a CHEST X-RAY (enter 1) or ANYTHING ELSE (enter 2)?' ...
-        '\n(Anything that does not include the lungs): '];
-    Case1 = ['Chest image identified. Please select an ROI by adjusting ' ...
-        'the box and double clicking on the area when you are done.'];
-    Case2 = 'Skipping the other selections.';
-    is_chest(ind) = twoCaseQ(Question, Case1, Case2);
+    disp('Image identified as Frontal Chest X-Ray.')
+    disp(' ')
+    xlabel('Frontal')
     
-    if(is_chest(ind)==1)
+    % Is this the original image or enhanced? %
+    Question = ['Is the image ORIGINAL (enter 1) or is the image ENHANCED or OTHERWISE UNUSABLE (enter 2)?' ...
+        '\n(Enhancements include Bone Enhancement, Bone Removal, Clearview, etc.): '];
+    Case1 = 'Original image identified.';
+    Case2 = 'Enhanced image identified';
+    orig_or_enhanced(ind) = twoCaseQ(Question, Case1, Case2);
+    
+    if(orig_or_enhanced(ind)==1)
         roi = images.roi.Rectangle(gca,'Position',[0.5,0.5,1000,1000],'StripeColor','r');
         pos = customWait(roi);
         pos(1:2) = floor(pos(1:2))/10;
         pos(3:4) = ceil(pos(3:4))/10;
-        roi_records(ind,:) = pos;
-        
-        % Find out if this is a frontal or lateral image %
-        Question = 'Is the image FRONTAL (enter 1) or LATERAL (enter 2): ';
-        Case1 = 'Frontal image identified.';
-        Case2 = 'Lateral image identified';
-        front_or_lat(ind) = twoCaseQ(Question, Case1, Case2);
-        
-        % Is this the original image or enhanced? %
-        Question = ['Is the image ORIGINAL (enter 1) or is the image ENHANCED (enter 2)?' ...
-            '\n(Enhancements include Bone Enhancement, Bone Removal, Clearview, etc.): '];
-        Case1 = 'Original image identified.';
-        Case2 = 'Enhanced image identified';
-        orig_or_enhanced(ind) = twoCaseQ(Question, Case1, Case2);
+        roi_records(ind,:) = pos;     
     end
     
     Question = ['Would you like to re-enter answers for Image ' num2str(ind) '?\n' ...

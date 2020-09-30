@@ -1,8 +1,8 @@
 %%% Read in the table with all file locations and info %%%
 pause on
 warning off
-t =  readtable('CV19_index.csv', 'Delimiter', ',');
-c2 = readtable('ImCrop.csv', 'Delimiter', ',');
+t =  readtable('HF_index.csv', 'Delimiter', ',');
+c2 = readtable('Answers_HFHS.csv', 'Delimiter', ',');
 warning on
 n_max = size(t,1);
 im_size = [1000 1000];
@@ -11,7 +11,7 @@ im_position = [0, 0, 1000, 1000];
 db_path = pwd; %uigetdir(pwd,'Select the COVID-19 folder');
 
 
-ind = 2;
+ind = 512;
 while(ind<n_max+1)
     % Read the file path for this example %
     path = interpretPath(db_path, t.ImagePath(ind));
@@ -24,22 +24,74 @@ while(ind<n_max+1)
     warning on
     
     disp(info)
-    namer = [t.Center{ind} '-' t.Patient{ind}];
+    namer = [t.Center{ind} '-'  num2str(t.Patient(ind))];
     disp(['CURRENTLY: Showing information for ' namer ' (' num2str(ind) ' out of ' num2str(n_max) ').']);
     disp(' ')
     disp(' ')
     
     f = figure(1);
     
-    if(strcmpi(t.Center{ind},'Busto'))
-        img = (double(img) - 8000)/(22000 - 8000);
-        img = abs(img - 1);
+    %     if(strcmpi(t.Center{ind},'Busto'))
+    %     try % if that info exists, use it. Otherwise use standard window
+    %        isRescaled = strcmpi(info.PixelIntensityRelationship, 'LOG');
+    %        wc = info.WindowCenter;
+    %        ww = info.WindowWidth;
+    %        wmin = wc - ww/2;
+    %        wmax = wc + ww/2;
+    %     catch ME
+    %         wmin = 0;
+    %         wmax = 4095;
+    %     end
+    
+    try
+        PIR = info.PixelIntensityRelationship;
+    catch ME
+        PIR = [];
+    end
+    
+    try
+        PLS = info.PresentationLUTShape;
+    catch ME2
+        PLS = [];
+    end
+    
+    
+    
+    if(strcmpi(PLS,'Inverse'))
+        dmax = 22000;
+        dmin = 8000;
+        img(img>dmax) = dmax;
+        img(img<dmin) = dmin;
+        img = (double(img) - dmin)/(dmax-dmin);
+        img = abs(1-img);
         wmin = 0;
         wmax = 1;
+%         
+        disp('Inversion correction')
     else
-        wmin = 0;
-        wmax = 4095;
+        try
+            wc = info.WindowCenter(1);
+            ww = info.WindowWidth(1);
+            wmin = wc - ww/2;
+            wmax = wc + ww/2;
+            WindowGiven = 'Yes';
+            if(strcmpi(PIR, 'LOG'))
+                disp('Log scale image')
+            end
+            disp('Using standard windows')
+        catch ME3
+            wmin = 0;
+            wmax = 4095;
+            disp('No info given')
+        end
     end
+    
+    %     wc = info.WindowCenter(1);
+    %     ww = info.WindowWidth(1);
+    %     wmin = wc - ww/2;
+    %     wmax = wc + ww/2;
+    
+    
     imshow(img, [wmin wmax],'InitialMagnification','fit')
     title(namer)
     % axes(f, 'tight')
@@ -47,14 +99,14 @@ while(ind<n_max+1)
     set(f, 'Position',  im_position)
     ax = gca;
     ax.Toolbar.Visible = 'off';
-
+    
     % Is this a chest image?
     
     if(c2.Var1(ind)==1)
         % Show ROI %
         ROI_POS = 10.*[c2.Var2(ind), c2.Var3(ind), c2.Var4(ind), c2.Var5(ind)];
-        roi = images.roi.Rectangle(gca,'Position',ROI_POS,'StripeColor','r');        
-      
+        roi = images.roi.Rectangle(gca,'Position',ROI_POS,'StripeColor','r');
+        
         % Find out if this is a frontal or lateral image %
         if(c2.Var6(ind)==1)
             disp('Image Identified as Frontal')
@@ -83,6 +135,12 @@ while(ind<n_max+1)
         
     end
     
+    f2 = figure(2);
+    dbl_img = double(img(:));
+    histogram(img)
+    xlabel(['Mean: ' num2str(mean(dbl_img), '%.6g') '     STD: ' num2str(std(dbl_img), '%.6g')])
+    set(f2, 'Position',  [1100, 400, 600, 400])
+    
     Question = ['Would you like to re-enter answers for Image ' num2str(ind) '?\n' ...
         'Enter 1 to GO TO PREVIOUS IMAGE,\n'...
         'Enter 2 to RESTART THIS IMAGE,\n' ...
@@ -98,16 +156,17 @@ while(ind<n_max+1)
             ind=1;
         end
     elseif(go_to_next==2)
-        %do nothing        
+        %do nothing
     elseif(go_to_next==3)
         ind = ind + 1;
     else
         disp('Error with image restart select')
     end
     
-%     pause(1)
+    %     pause(1)
     clc;
     close(f);
+    close(f2);
 end
 
 
