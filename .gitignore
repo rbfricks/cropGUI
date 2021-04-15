@@ -128,3 +128,5 @@ dmypy.json
 # Pyre type checker
 .pyre/
 CV19_index.csv
+HF_index.csv
+*.dcm
